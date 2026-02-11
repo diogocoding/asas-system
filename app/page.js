@@ -128,7 +128,6 @@ export default function SistemaAsas() {
       <div style={{ padding: "2.5rem" }}>
         {abaAtiva === "dashboard" && (
           <div style={{ display: "grid", gridTemplateColumns: "1fr 350px", gap: "2rem" }}>
-            {/* Lista de Performance */}
             <div style={{ backgroundColor: "#0f172a", padding: "2rem", borderRadius: "1.2rem", border: "1px solid #1e293b" }}>
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "2rem" }}>
                 <h3 style={{ color: "#d4af37" }}>Performance Mensal</h3>
@@ -162,33 +161,25 @@ export default function SistemaAsas() {
               })}
             </div>
 
-            {/* Gráfico de Distribuição (Funil) */}
             <div style={{ backgroundColor: "#0f172a", padding: "2rem", borderRadius: "1.2rem", border: "1px solid #d4af37", textAlign: "center" }}>
               <h3 style={{ color: "#d4af37", marginBottom: "2rem" }}>Distribuição do Mês</h3>
-              
               <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem", alignItems: "center" }}>
-                {/* Ligações */}
                 <div style={{ width: "100%" }}>
                   <small style={{ color: "#94a3b8" }}>LIGAÇÕES TOTAIS</small>
-                  <div style={{ fontSize: "1.5rem", fontWeight: "bold", color: "white" }}>{totalContatosGeral}</div>
+                  <div style={{ fontSize: "1.5rem", fontWeight: "bold" }}>{totalContatosGeral}</div>
                   <div style={{ height: "4px", background: "#d4af37", width: "100%", marginTop: "5px", borderRadius: "2px" }}></div>
                 </div>
-
-                {/* Reuniões */}
                 <div style={{ width: "80%" }}>
                   <small style={{ color: "#94a3b8" }}>REUNIÕES</small>
                   <div style={{ fontSize: "1.5rem", fontWeight: "bold", color: "#60a5fa" }}>{totalReunioesGeral}</div>
                   <div style={{ height: "4px", background: "#60a5fa", width: "100%", marginTop: "5px", borderRadius: "2px" }}></div>
                 </div>
-
-                {/* Visitas */}
                 <div style={{ width: "60%" }}>
                   <small style={{ color: "#94a3b8" }}>VISITAS</small>
                   <div style={{ fontSize: "1.5rem", fontWeight: "bold", color: "#10b981" }}>{totalVisitasGeral}</div>
                   <div style={{ height: "4px", background: "#10b981", width: "100%", marginTop: "5px", borderRadius: "2px" }}></div>
                 </div>
               </div>
-
               <div style={{ marginTop: "2rem", padding: "1rem", backgroundColor: "#020617", borderRadius: "12px", fontSize: "0.85rem", color: "#94a3b8" }}>
                 Conversão Reunião/Visita: 
                 <span style={{ color: "#d4af37", marginLeft: "5px" }}>
