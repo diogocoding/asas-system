@@ -46,7 +46,6 @@ export default function SistemaAsas() {
       corretor_nome: corretorLogado 
     };
 
-    // CORREÇÃO 1: Garante que o incremento aconteça corretamente no banco
     if (tipo === "2") updateData.total_reunioes = (lead.total_reunioes || 0) + 1;
     if (tipo === "3") updateData.total_visitas = (lead.total_visitas || 0) + 1;
 
@@ -77,8 +76,6 @@ export default function SistemaAsas() {
     equipe.forEach(nome => {
       const filtrados = dadosRelatorio.filter(l => l.corretor_nome === nome);
       const contatos = filtrados.reduce((acc, curr) => acc + (curr.tentativa_atual || 0), 0);
-      
-      // CORREÇÃO: Relatório agora soma Reuniões e Visitas corretamente
       const reunioes = filtrados.reduce((acc, curr) => acc + (curr.total_reunioes || 0), 0);
       const visitas = filtrados.reduce((acc, curr) => acc + (curr.total_visitas || 0), 0);
       
@@ -112,8 +109,6 @@ export default function SistemaAsas() {
             {equipe.map(nome => {
               const filtrados = leadsMesAtual.filter(l => l.corretor_nome === nome);
               const contatos = filtrados.reduce((acc, curr) => acc + (curr.tentativa_atual || 0), 0);
-              
-              // CORREÇÃO 2: Soma de métricas agora aparece no Dashboard
               const reunioes = filtrados.reduce((acc, curr) => acc + (curr.total_reunioes || 0), 0);
               const visitas = filtrados.reduce((acc, curr) => acc + (curr.total_visitas || 0), 0);
               
@@ -127,7 +122,6 @@ export default function SistemaAsas() {
                   <div style={{ width: "100%", height: "10px", backgroundColor: "#020617", borderRadius: "10px", overflow: "hidden" }}>
                     <div style={{ width: `${progresso}%`, height: "100%", background: "linear-gradient(90deg, #d4af37, #fde047)" }}></div>
                   </div>
-                  {/* EXIBIÇÃO DAS MÉTRICAS ABAIXO DA BARRA */}
                   <div style={{ marginTop: "8px", display: "flex", gap: "20px", fontSize: "0.85rem" }}>
                     <span style={{ color: "#60a5fa" }}>🤝 {reunioes} Reuniões</span>
                     <span style={{ color: "#10b981" }}>🚗 {visitas} Visitas</span>
@@ -188,12 +182,10 @@ export default function SistemaAsas() {
               <div style={{ backgroundColor: "#020617", padding: "1rem", borderRadius: "8px", marginTop: "1rem" }}><strong>WhatsApp Dia 1:</strong> "Oi [Nome], te liguei porque tenho um imóvel específico que pode fazer sentido pra você. Me chama aqui."</div>
               <div style={{ backgroundColor: "#020617", padding: "1rem", borderRadius: "8px", marginTop: "1rem" }}><strong>WhatsApp Dia 2:</strong> "Esse imóvel tem entrada facilitada e potencial de valorização alto. Posso te explicar em 2 min?"</div>
             </div>
-            {/* Outros blocos de playbook mantidos */}
           </div>
         )}
       </div>
 
-      {/* CORREÇÃO 3: Assinatura discreta no rodapé */}
       <footer style={{ padding: "1.5rem", textAlign: "center", fontSize: "0.8rem", color: "#475569", borderTop: "1px solid #1e293b" }}>
         criado por: diogo nascimento
       </footer>
