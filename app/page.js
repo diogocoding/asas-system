@@ -11,7 +11,6 @@ export default function SistemaAsas() {
   const [textoCopiado, setTextoCopiado] = useState("");
   const [filtroTurno, setFiltroTurno] = useState("todos");
 
-  // SENHAS INDIVIDUAIS
   const SENHAS_EQUIPE = {
     "Diogo": "diogoasas",
     "Pedro": "pedroasas",
@@ -58,12 +57,21 @@ export default function SistemaAsas() {
     (l) => new Date(l.created_at).getMonth() === mesAtual
   );
 
-  // Cálculos do Dashboard
+  // --- LÓGICA DE HISTÓRICO DIÁRIO ---
+  const hojeStr = new Date().toLocaleDateString("pt-BR");
+  const registrosHoje = leads.filter(l => {
+    const dataAcao = new Date(l.updated_at || l.created_at).toLocaleDateString("pt-BR");
+    return l.corretor_nome === corretorLogado && dataAcao === hojeStr;
+  });
+
+  const totalReunioesHoje = registrosHoje.reduce((acc, curr) => acc + (curr.total_reunioes_hoje || 0), 0); 
+  // Nota: Para precisão total em sistemas de alta escala, o ideal seria uma tabela separada de 'interacoes'
+  // ----------------------------------
+
   const totalReunioesGeral = leadsMesAtual.reduce((acc, curr) => acc + (curr.total_reunioes || 0), 0);
   const totalVisitasGeral = leadsMesAtual.reduce((acc, curr) => acc + (curr.total_visitas || 0), 0);
   const totalContatosGeral = leadsMesAtual.reduce((acc, curr) => acc + (curr.tentativa_atual || 0), 0);
 
-  // Lógica de Atendimento
   const meusLeads = leads.filter((l) => l.corretor_nome === corretorLogado);
   const leadsFiltrados = meusLeads.filter((l) => {
     if (filtroTurno === "manha") return l.tentativa_atual <= 3;
@@ -75,9 +83,17 @@ export default function SistemaAsas() {
     const status = window.prompt(`Último registro: ${lead.resultado_ultimo || "Nenhum"}\n\nNovo status:`);
     if (!status) return;
     const tipo = window.prompt("Gerou algo?\n1 - Apenas Contato\n2 - Reunião Agendada\n3 - Visita Agendada");
-    let updateData = { tentativa_atual: (lead.tentativa_atual || 0) + 1, resultado_ultimo: status, corretor_nome: corretorLogado };
+    
+    let updateData = { 
+      tentativa_atual: (lead.tentativa_atual || 0) + 1, 
+      resultado_ultimo: status, 
+      corretor_nome: corretorLogado,
+      updated_at: new Date().toISOString() // Força a data para o histórico diário
+    };
+
     if (tipo === "2") updateData.total_reunioes = (lead.total_reunioes || 0) + 1;
     if (tipo === "3") updateData.total_visitas = (lead.total_visitas || 0) + 1;
+    
     await supabase.from("leads").update(updateData).eq("id", lead.id);
     carregarLeads();
   }
@@ -133,7 +149,6 @@ export default function SistemaAsas() {
       </nav>
 
       <div style={{ padding: "2.5rem" }}>
-        {/* DASHBOARD PÚBLICO */}
         {abaAtiva === "dashboard" && (
           <div style={{ display: "grid", gridTemplateColumns: "1fr 350px", gap: "2rem" }}>
             <div style={{ backgroundColor: "#0f172a", padding: "2rem", borderRadius: "1.2rem", border: "1px solid #1e293b" }}>
@@ -191,7 +206,6 @@ export default function SistemaAsas() {
           </div>
         )}
 
-        {/* LOGIN PARA FLUXO E PLAYBOOK */}
         {(abaAtiva === "atendimento" || abaAtiva === "playbook") && !logado && (
           <div style={{ display: "flex", justifyContent: "center", marginTop: "5rem" }}>
             <div style={{ backgroundColor: "#0f172a", padding: "3rem", borderRadius: "1.5rem", border: "1px solid #d4af37", textAlign: "center", width: "100%", maxWidth: "400px" }}>
@@ -208,7 +222,6 @@ export default function SistemaAsas() {
           </div>
         )}
 
-        {/* MEU FLUXO - PROTEGIDO */}
         {abaAtiva === "atendimento" && logado && (
           <div style={{ display: "grid", gridTemplateColumns: "1fr 400px", gap: "2rem" }}>
             <div>
@@ -240,26 +253,55 @@ export default function SistemaAsas() {
                 ))}
               </div>
             </div>
-            <div style={{ backgroundColor: "rgba(15, 23, 42, 0.4)", padding: "2rem", borderRadius: "1.5rem", border: "1px solid #1e293b", height: "fit-content" }}>
-              <h3 style={{ color: "#d4af37", marginBottom: "1rem" }}>Importar Novos Leads</h3>
-              <textarea value={textoCopiado} onChange={(e) => setTextoCopiado(e.target.value)} style={{ width: "100%", height: "200px", background: "#020617", border: "1px solid #334155", borderRadius: "12px", color: "white", padding: "1rem" }} placeholder="Nome e Telefone..." />
-              <button 
-                onClick={async () => {
-                  const linhas = textoCopiado.split("\n");
-                  const novos = linhas.map((lin) => {
-                    const colunas = lin.split(/\t| {2,}/);
-                    return { nome_cliente: colunas[0]?.trim(), telefone: colunas[1]?.trim(), tentativa_atual: 1, corretor_nome: corretorLogado };
-                  }).filter((l) => l.nome_cliente);
-                  await supabase.from("leads").insert(novos);
-                  setTextoCopiado(""); carregarLeads(); alert("Importação concluída!");
-                }}
-                style={{ width: "100%", marginTop: "1rem", background: "linear-gradient(45deg, #d4af37, #b8860b)", color: "black", padding: "1rem", borderRadius: "12px", fontWeight: "bold", cursor: "pointer", border: "none" }}
-              > DECOLAR PARA MINHA LISTA </button>
+            
+            <div style={{ display: "flex", flexDirection: "column", gap: "2rem" }}>
+              {/* HISTÓRICO INDIVIDUAL DO DIA */}
+              <div style={{ backgroundColor: "#0f172a", padding: "2rem", borderRadius: "1.5rem", border: "1px solid #d4af37" }}>
+                <h3 style={{ color: "#d4af37", marginBottom: "1rem" }}>📈 Meu Desempenho Hoje</h3>
+                <div style={{ display: "flex", justifyContent: "space-around", marginBottom: "1.5rem", backgroundColor: "#020617", padding: "1rem", borderRadius: "12px" }}>
+                  <div style={{ textAlign: "center" }}>
+                    <div style={{ fontSize: "1.5rem", fontWeight: "bold" }}>{registrosHoje.length}</div>
+                    <small style={{ color: "#94a3b8" }}>CONTATOS</small>
+                  </div>
+                  <div style={{ textAlign: "center" }}>
+                    <div style={{ fontSize: "1.5rem", fontWeight: "bold", color: "#60a5fa" }}>
+                      {registrosHoje.filter(r => r.total_reunioes > (leads.find(l => l.id === r.id)?.total_reunioes || 0) || r.resultado_ultimo?.toLowerCase().includes("reunião")).length}
+                    </div>
+                    <small style={{ color: "#94a3b8" }}>REUNIÕES</small>
+                  </div>
+                </div>
+                <h4 style={{ fontSize: "0.75rem", color: "#64748b", marginBottom: "1rem", textTransform: "uppercase" }}>Últimas ações de hoje:</h4>
+                <div style={{ display: "flex", flexDirection: "column", gap: "10px", maxHeight: "300px", overflowY: "auto" }}>
+                  {registrosHoje.length > 0 ? registrosHoje.map((reg, i) => (
+                    <div key={i} style={{ padding: "10px", backgroundColor: "#1e293b", borderRadius: "8px", fontSize: "0.85rem" }}>
+                      <span style={{ color: "#d4af37", fontWeight: "bold" }}>{reg.nome_cliente}</span>
+                      <p style={{ margin: "5px 0 0 0", color: "#cbd5e1", fontSize: "0.8rem" }}>{reg.resultado_ultimo}</p>
+                    </div>
+                  )) : <p style={{ color: "#475569", fontSize: "0.8rem", textAlign: "center" }}>Nenhum registro hoje ainda.</p>}
+                </div>
+              </div>
+
+              {/* IMPORTAÇÃO */}
+              <div style={{ backgroundColor: "rgba(15, 23, 42, 0.4)", padding: "2rem", borderRadius: "1.5rem", border: "1px solid #1e293b" }}>
+                <h3 style={{ color: "#d4af37", marginBottom: "1rem" }}>Importar Novos Leads</h3>
+                <textarea value={textoCopiado} onChange={(e) => setTextoCopiado(e.target.value)} style={{ width: "100%", height: "150px", background: "#020617", border: "1px solid #334155", borderRadius: "12px", color: "white", padding: "1rem" }} placeholder="Nome e Telefone..." />
+                <button 
+                  onClick={async () => {
+                    const linhas = textoCopiado.split("\n");
+                    const novos = linhas.map((lin) => {
+                      const colunas = lin.split(/\t| {2,}/);
+                      return { nome_cliente: colunas[0]?.trim(), telefone: colunas[1]?.trim(), tentativa_atual: 1, corretor_nome: corretorLogado };
+                    }).filter((l) => l.nome_cliente);
+                    await supabase.from("leads").insert(novos);
+                    setTextoCopiado(""); carregarLeads(); alert("Importação concluída!");
+                  }}
+                  style={{ width: "100%", marginTop: "1rem", background: "linear-gradient(45deg, #d4af37, #b8860b)", color: "black", padding: "1rem", borderRadius: "12px", fontWeight: "bold", cursor: "pointer", border: "none" }}
+                > DECOLAR PARA MINHA LISTA </button>
+              </div>
             </div>
           </div>
         )}
 
-        {/* PLAYBOOK - PROTEGIDO */}
         {abaAtiva === "playbook" && logado && (
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "2rem" }}>
             <div style={{ backgroundColor: "#0f172a", padding: "2rem", borderRadius: "1.2rem", border: "1px solid #d4af37" }}>
