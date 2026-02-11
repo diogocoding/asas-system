@@ -13,7 +13,7 @@ export default function SistemaAsas() {
 
   // SENHAS INDIVIDUAIS
   const SENHAS_EQUIPE = {
-    "Diogo": "asas2026",
+    "Diogo": "diogoasas",
     "Pedro": "pedroasas",
     "João": "joaoasas",
     "Sidney": "sidneyasas",
