@@ -181,15 +181,20 @@ const totalContatosGeral = interacoesFiltradas.length;
       <div style={{ padding: "2.5rem" }}>
         {/* DASHBOARD PÚBLICO */}
         {abaAtiva === "dashboard" && (
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: "2rem" }}>
-  <div>
-    <h3 style={{ color: "#d4af37", marginBottom: "12px", fontSize: "1.4rem" }}>Performance Mensal</h3>
-    <div style={{ display: "flex", gap: "8px" }}>
-      <button 
-        onClick={() => setFiltroData("hoje")} 
-        style={{ backgroundColor: filtroData === "hoje" ? "#d4af37" : "#1e293b", color: filtroData === "hoje" ? "black" : "white", border: "none", padding: "6px 16px", borderRadius: "6px", cursor: "pointer", fontSize: "0.75rem", fontWeight: "bold", transition: "0.3s" }}
-      >
-        HOJE
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 350px", gap: "2rem" }}>
+            
+            {/* COLUNA DA ESQUERDA: PERFORMANCE */}
+            <div style={{ backgroundColor: "#0f172a", padding: "2rem", borderRadius: "1.2rem", border: "1px solid #1e293b" }}>
+              
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: "2rem" }}>
+                <div>
+                  <h3 style={{ color: "#d4af37", marginBottom: "12px", fontSize: "1.4rem" }}>Performance Mensal</h3>
+                  <div style={{ display: "flex", gap: "8px" }}>
+                    <button 
+                      onClick={() => setFiltroData("hoje")} 
+                      style={{ backgroundColor: filtroData === "hoje" ? "#d4af37" : "#1e293b", color: filtroData === "hoje" ? "black" : "white", border: "none", padding: "6px 16px", borderRadius: "6px", cursor: "pointer", fontSize: "0.75rem", fontWeight: "bold" }}
+                    >
+                      HOJE
                     </button>
                     <button 
                       onClick={() => setFiltroData("mes")} 
@@ -205,6 +210,7 @@ const totalContatosGeral = interacoesFiltradas.length;
                 </button>
               </div>
 
+              {/* O MAPA DA EQUIPE PRECISA ESTAR AQUI DENTRO */}
               {equipe.map((nome) => {
                 const interacoesDoCorretor = interacoesFiltradas.filter((i) => i.corretor_nome === nome);
                 const contatos = interacoesDoCorretor.length; 
@@ -229,6 +235,8 @@ const totalContatosGeral = interacoesFiltradas.length;
                 );
               })}
             </div>
+
+            {/* COLUNA DA DIREITA: CARDS TOTAIS */}
             <div style={{ backgroundColor: "#0f172a", padding: "2rem", borderRadius: "1.2rem", border: "1px solid #d4af37", textAlign: "center" }}>
               <h3 style={{ color: "#d4af37", marginBottom: "2rem" }}>Distribuição do Mês</h3>
               <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem", alignItems: "center" }}>
