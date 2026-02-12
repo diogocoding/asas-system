@@ -4,6 +4,7 @@ import { supabase } from "../lib/supabase";
 
 
 export default function SistemaAsas() {
+  const [historicoDiario, setHistoricoDiario] = useState([]);
   const [logado, setLogado] = useState(false);
   const [senhaInserida, setSenhaInserida] = useState("");
   const [abaAtiva, setAbaAtiva] = useState("dashboard");
@@ -39,12 +40,34 @@ export default function SistemaAsas() {
     const { data: interData } = await supabase
       .from("interacoes")
       .select("*");
-    if (interData) setInteracoes(interData);
+    if (interData) {
+      setInteracoes(interData);
+
+      // --- INÍCIO DA LÓGICA DE HISTÓRICO ---
+      // Filtra apenas as interações do corretor que está logado agora
+      const minhasInters = interData.filter(i => i.corretor_nome === corretorLogado);
+
+      // Agrupa as interações por dia e conta quantas foram feitas
+      const agrupado = minhasInters.reduce((acc, curr) => {
+        // curr.created_at vem do banco como "2026-02-12T..." - pegamos apenas a data
+        const data = curr.created_at.split('T')[0]; 
+        acc[data] = (acc[data] || 0) + 1;
+        return acc;
+      }, {});
+
+      // Transforma o objeto agrupado em uma lista ordenada para exibir na tela
+      const listaFormatada = Object.entries(agrupado)
+        .map(([data, qtd]) => ({ data, qtd }))
+        .sort((a, b) => b.data.localeCompare(a.data)); // Ordena: Mais recentes primeiro
+
+      setHistoricoDiario(listaFormatada);
+      // --- FIM DA LÓGICA DE HISTÓRICO ---
+    }
   }
 
   useEffect(() => {
     carregarDados(); // Agora ele carrega os dois bancos de dados ao iniciar
-  }, []);
+  }, [corretorLogado]);
 
   const handleLogin = (e) => {
     e.preventDefault();
@@ -160,7 +183,7 @@ const totalContatosGeral = interacoesFiltradas.length;
 
   return (
     <div style={{ backgroundColor: "#020617", minHeight: "100vh", color: "white", fontFamily: "sans-serif" }}>
-      <nav style={{ display: "flex", gap: "2rem", padding: "1.2rem 2.5rem", borderBottom: "1px solid #d4af37", backgroundColor: "#0f172a", alignItems: "center" }}>
+      <nav style={{ display: "flex", gap: "2rem", padding: "1.2rem 2.5rem", borderBottom: "1px solid #d4af37", alignItems: "center" }}>
         <img src="/logo.png" alt="ASAS" style={{ height: "60px" }} />
         <button onClick={() => setAbaAtiva("dashboard")} style={{ background: "none", border: "none", color: abaAtiva === "dashboard" ? "#d4af37" : "#94a3b8", cursor: "pointer", fontWeight: "bold" }}>📊 DASHBOARD</button>
         <button onClick={() => setAbaAtiva("atendimento")} style={{ background: "none", border: "none", color: abaAtiva === "atendimento" ? "#d4af37" : "#94a3b8", cursor: "pointer", fontWeight: "bold" }}>📞 MEU FLUXO</button>
@@ -314,6 +337,33 @@ const totalContatosGeral = interacoesFiltradas.length;
               </div>
             </div>
             <div style={{ backgroundColor: "rgba(15, 23, 42, 0.4)", padding: "2rem", borderRadius: "1.5rem", border: "1px solid #1e293b", height: "fit-content" }}>
+                  {/* HISTÓRICO DIÁRIO DE REGISTROS */}
+<div style={{ backgroundColor: "#0f172a", padding: "1.5rem", borderRadius: "1.2rem", border: "1px solid #d4af37", marginBottom: "2rem" }}>
+  <h3 style={{ color: "#d4af37", fontSize: "1rem", marginBottom: "1rem", display: "flex", alignItems: "center", gap: "10px" }}>
+    📅 MEU HISTÓRICO DIÁRIO
+  </h3>
+  <div style={{ maxHeight: "200px", overflowY: "auto", paddingRight: "5px" }}>
+    {historicoDiario.length > 0 ? (
+      historicoDiario.map((item) => (
+        <div key={item.data} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: "1px solid #1e293b" }}>
+          <div>
+            <span style={{ fontSize: "0.85rem", color: "#94a3b8", block: "block" }}>
+              {new Date(item.data + "T00:00:00").toLocaleDateString("pt-BR")}
+            </span>
+          </div>
+          <div style={{ textAlign: "right" }}>
+            <strong style={{ color: "#d4af37", fontSize: "1rem" }}>{item.qtd}</strong>
+            <small style={{ color: "#64748b", marginLeft: "5px" }}>registros</small>
+          </div>
+        </div>
+      ))
+    ) : (
+      <div style={{ color: "#64748b", fontSize: "0.85rem", textAlign: "center", padding: "20px" }}>
+        Nenhum registro encontrado.
+      </div>
+    )}
+  </div>
+</div>
               <h3 style={{ color: "#d4af37", marginBottom: "1rem" }}>Importar Novos Leads</h3>
               <textarea value={textoCopiado} onChange={(e) => setTextoCopiado(e.target.value)} style={{ width: "100%", height: "200px", background: "#020617", border: "1px solid #334155", borderRadius: "12px", color: "white", padding: "1rem" }} placeholder="Nome e Telefone..." />
               <button 
