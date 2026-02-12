@@ -8,10 +8,12 @@ export default function SistemaAsas() {
   const [abaAtiva, setAbaAtiva] = useState("dashboard");
   const [corretorLogado, setCorretorLogado] = useState("Diogo");
   const [leads, setLeads] = useState([]);
+  const [interacoes, setInteracoes] = useState([]); 
   const [textoCopiado, setTextoCopiado] = useState("");
   const [filtroTurno, setFiltroTurno] = useState("todos");
+  const [filtroHistorico, setFiltroHistorico] = useState("hoje");
+  const [buscaLead, setBuscaLead] = useState("");
 
-  // SENHAS INDIVIDUAIS
   const SENHAS_EQUIPE = {
     "Diogo": "diogoasas",
     "Pedro": "pedroasas",
@@ -32,9 +34,23 @@ export default function SistemaAsas() {
     if (data) setLeads(data);
   }
 
+  async function carregarInteracoes() {
+    if (!corretorLogado) return;
+    const { data } = await supabase
+      .from("interacoes")
+      .select(`*, leads(nome_cliente)`)
+      .eq("corretor_nome", corretorLogado)
+      .order("created_at", { ascending: false });
+    if (data) setInteracoes(data);
+  }
+
   useEffect(() => {
     carregarLeads();
   }, []);
+
+  useEffect(() => {
+    if (logado) carregarInteracoes();
+  }, [logado, corretorLogado]);
 
   const handleLogin = (e) => {
     e.preventDefault();
@@ -42,253 +58,208 @@ export default function SistemaAsas() {
       setLogado(true);
       setSenhaInserida("");
     } else {
-      alert(`Senha incorreta para ${corretorLogado}!`);
+      alert(`Senha incorreta!`);
       setSenhaInserida("");
     }
   };
 
-  const formatarData = (dataISO) => {
-    if (!dataISO) return "Data não disponível";
-    const data = new Date(dataISO);
-    return data.toLocaleDateString("pt-BR");
-  };
+  const formatarData = (dataISO) => new Date(dataISO).toLocaleDateString("pt-BR");
+  const formatarHora = (dataISO) => new Date(dataISO).toLocaleTimeString("pt-BR", { hour: '2-digit', minute: '2-digit' });
 
+  // Lógica do Dashboard
   const mesAtual = new Date().getMonth();
-  const leadsMesAtual = leads.filter(
-    (l) => new Date(l.created_at).getMonth() === mesAtual
-  );
-
-  // Cálculos do Dashboard
+  const leadsMesAtual = leads.filter(l => new Date(l.created_at).getMonth() === mesAtual);
+  const totalContatosGeral = leadsMesAtual.reduce((acc, curr) => acc + (curr.tentativa_atual || 0), 0);
   const totalReunioesGeral = leadsMesAtual.reduce((acc, curr) => acc + (curr.total_reunioes || 0), 0);
   const totalVisitasGeral = leadsMesAtual.reduce((acc, curr) => acc + (curr.total_visitas || 0), 0);
-  const totalContatosGeral = leadsMesAtual.reduce((acc, curr) => acc + (curr.tentativa_atual || 0), 0);
 
   // Lógica de Atendimento
-  const meusLeads = leads.filter((l) => l.corretor_nome === corretorLogado);
-  const leadsFiltrados = meusLeads.filter((l) => {
-    if (filtroTurno === "manha") return l.tentativa_atual <= 3;
-    if (filtroTurno === "tarde") return l.tentativa_atual > 3;
+  const meusLeads = leads.filter(l => l.corretor_nome === corretorLogado);
+  const leadsFiltrados = meusLeads.filter(l => {
+    if (filtroTurno === "manha") return (l.tentativa_atual || 0) <= 3;
+    if (filtroTurno === "tarde") return (l.tentativa_atual || 0) > 3;
     return true;
   });
 
+  // Filtro de Histórico
+  const historicoFiltrado = interacoes.filter(i => {
+    const dataI = new Date(i.created_at);
+    const hoje = new Date();
+    const diff = (hoje - dataI) / (1000 * 60 * 60 * 24);
+    
+    const matchesBusca = i.leads?.nome_cliente?.toLowerCase().includes(buscaLead.toLowerCase());
+    if (filtroHistorico === "hoje") return diff < 1 && matchesBusca;
+    if (filtroHistorico === "semana") return diff < 7 && matchesBusca;
+    return matchesBusca;
+  });
+
   async function registrarInteracao(lead) {
-    const status = window.prompt(`Último registro: ${lead.resultado_ultimo || "Nenhum"}\n\nNovo status:`);
+    const status = window.prompt(`Novo status para ${lead.nome_cliente}:`);
     if (!status) return;
-    const tipo = window.prompt("Gerou algo?\n1 - Apenas Contato\n2 - Reunião Agendada\n3 - Visita Agendada");
-    let updateData = { tentativa_atual: (lead.tentativa_atual || 0) + 1, resultado_ultimo: status, corretor_nome: corretorLogado };
+    const tipo = window.prompt("Gerou o quê?\n1 - Contato\n2 - Reunião\n3 - Visita");
+    
+    const updateData = {
+      tentativa_atual: (lead.tentativa_atual || 0) + 1,
+      resultado_ultimo: status,
+      corretor_nome: corretorLogado
+    };
     if (tipo === "2") updateData.total_reunioes = (lead.total_reunioes || 0) + 1;
     if (tipo === "3") updateData.total_visitas = (lead.total_visitas || 0) + 1;
+
     await supabase.from("leads").update(updateData).eq("id", lead.id);
+    await supabase.from("interacoes").insert({
+      lead_id: lead.id,
+      corretor_nome: corretorLogado,
+      status: status,
+      tipo: tipo === "2" ? "REUNIÃO" : tipo === "3" ? "VISITA" : "CONTATO"
+    });
+
     carregarLeads();
+    carregarInteracoes();
   }
 
   async function excluirLead(id) {
-    if (confirm("Deseja realmente remover este lead?")) {
+    if (confirm("Remover lead?")) {
       await supabase.from("leads").delete().eq("id", id);
       carregarLeads();
     }
   }
 
-  async function limparMinhaFila() {
-    if (confirm(`Atenção ${corretorLogado}: Isso apagará TODOS os seus leads permanentemente. Confirma?`)) {
-      await supabase.from("leads").delete().eq("corretor_nome", corretorLogado);
-      carregarLeads();
-      alert("Sua fila foi zerada!");
-    }
-  }
-
   function exportarRelatorio() {
-    const tipo = window.confirm("MÊS ATUAL (OK) ou GERAL (Cancelar)?");
-    const dadosRelatorio = tipo ? leadsMesAtual : leads;
-    let relatorio = `*📊 RELATÓRIO ASAS - ${tipo ? "MÊS ATUAL" : "GERAL"}*\n\n`;
-    equipe.forEach((nome) => {
-      const filtrados = dadosRelatorio.filter((l) => l.corretor_nome === nome);
-      const contatos = filtrados.reduce((acc, curr) => acc + (curr.tentativa_atual || 0), 0);
-      const reunioes = filtrados.reduce((acc, curr) => acc + (curr.total_reunioes || 0), 0);
-      const visitas = filtrados.reduce((acc, curr) => acc + (curr.total_visitas || 0), 0);
-      relatorio += `👤 *${nome.toUpperCase()}*\n📞 Ligações: ${contatos}\n🤝 Reuniões: ${reunioes}\n🚗 Visitas: ${visitas}\n----------\n`;
+    let relatorio = `*📊 RELATÓRIO ASAS*\n\n`;
+    equipe.forEach(nome => {
+      const f = leadsMesAtual.filter(l => l.corretor_nome === nome);
+      relatorio += `👤 *${nome}*: 📞${f.reduce((a,c)=>a+(c.tentativa_atual||0),0)} | 🤝${f.reduce((a,c)=>a+(c.total_reunioes||0),0)}\n`;
     });
     navigator.clipboard.writeText(relatorio);
-    alert("Relatório copiado!");
+    alert("Copiado!");
   }
 
   return (
     <div style={{ backgroundColor: "#020617", minHeight: "100vh", color: "white", fontFamily: "sans-serif" }}>
       <nav style={{ display: "flex", gap: "2rem", padding: "1.2rem 2.5rem", borderBottom: "1px solid #d4af37", backgroundColor: "#0f172a", alignItems: "center" }}>
-        <img src="/logo.png" alt="ASAS" style={{ height: "60px" }} />
+        <img src="/logo.png" alt="ASAS" style={{ height: "40px" }} />
         <button onClick={() => setAbaAtiva("dashboard")} style={{ background: "none", border: "none", color: abaAtiva === "dashboard" ? "#d4af37" : "#94a3b8", cursor: "pointer", fontWeight: "bold" }}>📊 DASHBOARD</button>
         <button onClick={() => setAbaAtiva("atendimento")} style={{ background: "none", border: "none", color: abaAtiva === "atendimento" ? "#d4af37" : "#94a3b8", cursor: "pointer", fontWeight: "bold" }}>📞 MEU FLUXO</button>
         <button onClick={() => setAbaAtiva("playbook")} style={{ background: "none", border: "none", color: abaAtiva === "playbook" ? "#d4af37" : "#94a3b8", cursor: "pointer", fontWeight: "bold" }}>📖 PLAYBOOK</button>
-        
-        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center" }}>
-          {logado ? (
-            <>
-              <span style={{ color: "#d4af37", marginRight: "10px", fontSize: "0.9rem" }}>Olá, <strong>{corretorLogado}</strong></span>
-              <button onClick={() => { setLogado(false); setAbaAtiva("dashboard"); }} style={{ background: "#ef4444", border: "none", color: "white", padding: "5px 12px", borderRadius: "6px", cursor: "pointer", fontSize: "0.75rem", fontWeight: "bold" }}>SAIR</button>
-            </>
-          ) : (
-            <span style={{ color: "#64748b", fontSize: "0.8rem" }}>Modo Visualização</span>
-          )}
+        <div style={{ marginLeft: "auto" }}>
+          {logado ? <button onClick={() => setLogado(false)} style={{ background: "#ef4444", color: "white", border: "none", padding: "5px 10px", borderRadius: "5px", cursor: "pointer" }}>SAIR</button> : "Modo Visualização"}
         </div>
       </nav>
 
-      <div style={{ padding: "2.5rem" }}>
-        {/* DASHBOARD PÚBLICO */}
+      <div style={{ padding: "2rem" }}>
         {abaAtiva === "dashboard" && (
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 350px", gap: "2rem" }}>
-            <div style={{ backgroundColor: "#0f172a", padding: "2rem", borderRadius: "1.2rem", border: "1px solid #1e293b" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "2rem" }}>
-                <h3 style={{ color: "#d4af37" }}>Performance Mensal</h3>
-                <button onClick={exportarRelatorio} style={{ backgroundColor: "#10b981", color: "white", border: "none", padding: "10px 20px", borderRadius: "8px", fontWeight: "bold", cursor: "pointer" }}>📤 Relatório WhatsApp</button>
-              </div>
-              {equipe.map((nome) => {
-                const filtrados = leadsMesAtual.filter((l) => l.corretor_nome === nome);
-                const contatos = filtrados.reduce((acc, curr) => acc + (curr.tentativa_atual || 0), 0);
-                const reunioes = filtrados.reduce((acc, curr) => acc + (curr.total_reunioes || 0), 0);
-                const visitas = filtrados.reduce((acc, curr) => acc + (curr.total_visitas || 0), 0);
-                const progresso = Math.min((contatos / META_LIGACOES) * 100, 100);
-                return (
-                  <div key={nome} style={{ marginBottom: "1.5rem", borderBottom: "1px solid #1e293b", paddingBottom: "1rem" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px" }}>
-                      <span>{nome} {progresso >= 100 && "🏆"}</span>
-                      <div style={{ display: "flex", gap: "15px", fontSize: "0.85rem" }}>
-                        <span style={{ color: "#94a3b8" }}>📞 {contatos}</span>
-                        <span style={{ color: "#60a5fa" }}>🤝 {reunioes}</span>
-                        <span style={{ color: "#10b981" }}>🚗 {visitas}</span>
-                      </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 300px", gap: "2rem" }}>
+                <div style={{ backgroundColor: "#0f172a", padding: "1.5rem", borderRadius: "1rem", border: "1px solid #1e293b" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "1rem" }}>
+                        <h3>Performance do Mês</h3>
+                        <button onClick={exportarRelatorio} style={{ background: "#10b981", border: "none", color: "white", padding: "8px", borderRadius: "5px", cursor: "pointer" }}>Relatório WhatsApp</button>
                     </div>
-                    <div style={{ width: "100%", height: "8px", backgroundColor: "#020617", borderRadius: "10px", overflow: "hidden" }}>
-                      <div style={{ width: `${progresso}%`, height: "100%", background: "linear-gradient(90deg, #d4af37, #fde047)" }}></div>
-                    </div>
-                  </div>
-                );
-              })}
+                    {equipe.map(nome => {
+                        const f = leadsMesAtual.filter(l => l.corretor_nome === nome);
+                        const c = f.reduce((a,b)=>a+(b.tentativa_atual||0),0);
+                        return (
+                            <div key={nome} style={{ marginBottom: "1rem" }}>
+                                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.9rem" }}>
+                                    <span>{nome}</span>
+                                    <span>📞 {c}</span>
+                                </div>
+                                <div style={{ height: "6px", background: "#020617", borderRadius: "3px", marginTop: "5px" }}>
+                                    <div style={{ width: `${Math.min((c/META_LIGACOES)*100, 100)}%`, height: "100%", background: "#d4af37", borderRadius: "3px" }}></div>
+                                </div>
+                            </div>
+                        )
+                    })}
+                </div>
+                <div style={{ backgroundColor: "#0f172a", padding: "1.5rem", borderRadius: "1rem", border: "1px solid #d4af37", textAlign: "center" }}>
+                    <h4>Total Geral</h4>
+                    <h2 style={{ color: "#d4af37" }}>{totalContatosGeral}</h2>
+                    <p>Ligações no mês</p>
+                    <hr style={{ opacity: 0.1, margin: "1rem 0" }} />
+                    <h3 style={{ color: "#60a5fa" }}>{totalReunioesGeral}</h3>
+                    <p>Reuniões</p>
+                </div>
             </div>
-            <div style={{ backgroundColor: "#0f172a", padding: "2rem", borderRadius: "1.2rem", border: "1px solid #d4af37", textAlign: "center" }}>
-              <h3 style={{ color: "#d4af37", marginBottom: "2rem" }}>Distribuição do Mês</h3>
-              <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem", alignItems: "center" }}>
-                <div style={{ width: "100%" }}>
-                  <small style={{ color: "#94a3b8" }}>LIGAÇÕES TOTAIS</small>
-                  <div style={{ fontSize: "1.5rem", fontWeight: "bold" }}>{totalContatosGeral}</div>
-                  <div style={{ height: "4px", background: "#d4af37", width: "100%", marginTop: "5px", borderRadius: "2px" }}></div>
-                </div>
-                <div style={{ width: "80%" }}>
-                  <small style={{ color: "#94a3b8" }}>REUNIÕES</small>
-                  <div style={{ fontSize: "1.5rem", fontWeight: "bold", color: "#60a5fa" }}>{totalReunioesGeral}</div>
-                  <div style={{ height: "4px", background: "#60a5fa", width: "100%", marginTop: "5px", borderRadius: "2px" }}></div>
-                </div>
-                <div style={{ width: "60%" }}>
-                  <small style={{ color: "#94a3b8" }}>VISITAS</small>
-                  <div style={{ fontSize: "1.5rem", fontWeight: "bold", color: "#10b981" }}>{totalVisitasGeral}</div>
-                  <div style={{ height: "4px", background: "#10b981", width: "100%", marginTop: "5px", borderRadius: "2px" }}></div>
-                </div>
-              </div>
-              <div style={{ marginTop: "2rem", padding: "1rem", backgroundColor: "#020617", borderRadius: "12px", fontSize: "0.85rem", color: "#94a3b8" }}>
-                Conversão Reunião/Visita: 
-                <span style={{ color: "#d4af37", marginLeft: "5px" }}> {totalReunioesGeral > 0 ? ((totalVisitasGeral / totalReunioesGeral) * 100).toFixed(1) : 0}% </span>
-              </div>
-            </div>
-          </div>
         )}
 
-        {/* LOGIN PARA FLUXO E PLAYBOOK */}
-        {(abaAtiva === "atendimento" || abaAtiva === "playbook") && !logado && (
-          <div style={{ display: "flex", justifyContent: "center", marginTop: "5rem" }}>
-            <div style={{ backgroundColor: "#0f172a", padding: "3rem", borderRadius: "1.5rem", border: "1px solid #d4af37", textAlign: "center", width: "100%", maxWidth: "400px" }}>
-              <h2 style={{ color: "#d4af37", marginBottom: "0.5rem" }}>Login de Equipe</h2>
-              <p style={{ color: "#94a3b8", marginBottom: "1.5rem", fontSize: "0.9rem" }}>Selecione seu perfil para acessar o fluxo</p>
-              <form onSubmit={handleLogin}>
-                <select value={corretorLogado} onChange={(e) => setCorretorLogado(e.target.value)} style={{ width: "100%", padding: "12px", borderRadius: "8px", border: "1px solid #334155", background: "#020617", color: "#d4af37", marginBottom: "1rem" }}>
-                  {equipe.map((nome) => ( <option key={nome} value={nome}>{nome}</option> ))}
-                </select>
-                <input type="password" placeholder="Digite sua senha" value={senhaInserida} onChange={(e) => setSenhaInserida(e.target.value)} style={{ width: "100%", padding: "12px", borderRadius: "8px", border: "1px solid #334155", background: "#020617", color: "white", marginBottom: "1.5rem", textAlign: "center" }} />
-                <button type="submit" style={{ width: "100%", padding: "12px", borderRadius: "8px", background: "linear-gradient(45deg, #d4af37, #b8860b)", color: "black", fontWeight: "bold", cursor: "pointer", border: "none" }}>ACESSAR</button>
-              </form>
-            </div>
-          </div>
-        )}
-
-        {/* MEU FLUXO - PROTEGIDO */}
         {abaAtiva === "atendimento" && logado && (
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 400px", gap: "2rem" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 450px", gap: "2rem" }}>
+            {/* COLUNA DA ESQUERDA: LISTA DE TRABALHO */}
             <div>
-              <div style={{ display: "flex", gap: "1rem", marginBottom: "2rem", alignItems: "center" }}>
-                <button onClick={() => setFiltroTurno("todos")} style={{ backgroundColor: filtroTurno === "todos" ? "#d4af37" : "#1e293b", color: filtroTurno === "todos" ? "black" : "white", border: "none", padding: "10px 15px", borderRadius: "8px", cursor: "pointer" }}>Ver Todos</button>
-                <button onClick={() => setFiltroTurno("manha")} style={{ backgroundColor: filtroTurno === "manha" ? "#d4af37" : "#1e293b", color: filtroTurno === "manha" ? "black" : "white", border: "none", padding: "10px 15px", borderRadius: "8px", cursor: "pointer" }}>☀️ Manhã - N/Q Até 3°</button>
-                <button onClick={() => setFiltroTurno("tarde")} style={{ backgroundColor: filtroTurno === "tarde" ? "#d4af37" : "#1e293b", color: filtroTurno === "tarde" ? "black" : "white", border: "none", padding: "10px 15px", borderRadius: "8px", cursor: "pointer" }}>🌖 Tarde - Follow-ups</button>
-                <button onClick={limparMinhaFila} style={{ backgroundColor: "#ef4444", color: "white", border: "none", padding: "10px 15px", borderRadius: "8px", fontWeight: "bold", cursor: "pointer", marginLeft: "auto" }}>🔥 Limpar Minha Fila</button>
+              <div style={{ display: "flex", gap: "10px", marginBottom: "1rem" }}>
+                <button onClick={() => setFiltroTurno("todos")} style={{ background: filtroTurno === "todos" ? "#d4af37" : "#1e293b", border: "none", padding: "8px", borderRadius: "5px", color: "black", cursor: "pointer" }}>Todos</button>
+                <button onClick={() => setFiltroTurno("manha")} style={{ background: filtroTurno === "manha" ? "#d4af37" : "#1e293b", border: "none", padding: "8px", borderRadius: "5px", color: "black", cursor: "pointer" }}>☀️ Manhã</button>
+                <button onClick={() => setFiltroTurno("tarde")} style={{ background: filtroTurno === "tarde" ? "#d4af37" : "#1e293b", border: "none", padding: "8px", borderRadius: "5px", color: "black", cursor: "pointer" }}>🌖 Tarde</button>
               </div>
-              <div style={{ backgroundColor: "#0f172a", borderRadius: "1.2rem", border: "1px solid #1e293b", padding: "1rem" }}>
-                {leadsFiltrados.map((lead) => (
-                  <div key={lead.id} style={{ padding: "1.5rem", borderBottom: "1px solid #1e293b", display: "flex", justifyContent: "space-between" }}>
-                    <div style={{ flex: 1 }}>
-                      <strong style={{ fontSize: "1.1rem" }}>{lead.nome_cliente}</strong><br />
-                      <small style={{ color: "#94a3b8", display: "block", marginBottom: "4px" }}>{lead.telefone}</small>
-                      <small style={{ color: "#64748b", fontStyle: "italic" }}>Adicionado em: {formatarData(lead.created_at)}</small>
-                      <div style={{ marginTop: "10px", padding: "10px", backgroundColor: "#020617", borderRadius: "8px", borderLeft: "4px solid #d4af37", fontSize: "0.9rem" }}>
-                        <strong>ÚLTIMO REGISTRO:</strong> {lead.resultado_ultimo || "Sem anotações."}
-                      </div>
+              
+              <div style={{ backgroundColor: "#0f172a", borderRadius: "1rem", border: "1px solid #1e293b", padding: "1rem" }}>
+                {leadsFiltrados.map(lead => (
+                  <div key={lead.id} style={{ padding: "1rem", borderBottom: "1px solid #1e293b", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div>
+                      <strong>{lead.nome_cliente}</strong>
+                      <div style={{ fontSize: "0.8rem", color: "#94a3b8" }}>{lead.telefone} | {lead.tentativa_atual || 1}ª Tentativa</div>
                     </div>
-                    <div style={{ textAlign: "right", minWidth: "150px" }}>
-                      <span style={{ fontSize: "0.75rem", backgroundColor: lead.tentativa_atual >= 5 ? "#d4af37" : "#1e293b", color: lead.tentativa_atual >= 5 ? "black" : "white", padding: "4px 10px", borderRadius: "20px" }}> {lead.tentativa_atual || 1}ª tentativa </span>
-                      <div style={{ display: "flex", gap: "10px", marginTop: "15px", justifyContent: "flex-end" }}>
-                        <button onClick={() => registrarInteracao(lead)} style={{ backgroundColor: "#d4af37", color: "black", border: "none", padding: "8px 12px", borderRadius: "6px", fontWeight: "bold", cursor: "pointer" }}>REGISTRAR</button>
-                        <button onClick={() => excluirLead(lead.id)} style={{ backgroundColor: "#ef4444", color: "white", border: "none", padding: "8px 12px", borderRadius: "6px", cursor: "pointer" }}>🗑️</button>
-                      </div>
-                    </div>
+                    <button onClick={() => registrarInteracao(lead)} style={{ background: "#d4af37", color: "black", border: "none", padding: "8px", borderRadius: "5px", fontWeight: "bold", cursor: "pointer" }}>REGISTRAR</button>
                   </div>
                 ))}
               </div>
+              
+              <div style={{ marginTop: "2rem" }}>
+                 <textarea value={textoCopiado} onChange={(e) => setTextoCopiado(e.target.value)} style={{ width: "100%", height: "100px", background: "#0f172a", border: "1px solid #1e293b", color: "white", padding: "10px", borderRadius: "8px" }} placeholder="Importar: Nome e Telefone..." />
+                 <button onClick={async () => {
+                    const linhas = textoCopiado.split("\n");
+                    const novos = linhas.map(l => {
+                        const cols = l.split(/\t| {2,}/);
+                        return { nome_cliente: cols[0], telefone: cols[1], corretor_nome: corretorLogado, tentativa_atual: 1 };
+                    }).filter(x => x.nome_cliente);
+                    await supabase.from("leads").insert(novos);
+                    setTextoCopiado(""); carregarLeads();
+                 }} style={{ width: "100%", background: "#d4af37", padding: "10px", border: "none", borderRadius: "8px", marginTop: "10px", fontWeight: "bold", cursor: "pointer" }}>DECOLAR LEADS</button>
+              </div>
             </div>
-            <div style={{ backgroundColor: "rgba(15, 23, 42, 0.4)", padding: "2rem", borderRadius: "1.5rem", border: "1px solid #1e293b", height: "fit-content" }}>
-              <h3 style={{ color: "#d4af37", marginBottom: "1rem" }}>Importar Novos Leads</h3>
-              <textarea value={textoCopiado} onChange={(e) => setTextoCopiado(e.target.value)} style={{ width: "100%", height: "200px", background: "#020617", border: "1px solid #334155", borderRadius: "12px", color: "white", padding: "1rem" }} placeholder="Nome e Telefone..." />
-              <button 
-                onClick={async () => {
-                  const linhas = textoCopiado.split("\n");
-                  const novos = linhas.map((lin) => {
-                    const colunas = lin.split(/\t| {2,}/);
-                    return { nome_cliente: colunas[0]?.trim(), telefone: colunas[1]?.trim(), tentativa_atual: 1, corretor_nome: corretorLogado };
-                  }).filter((l) => l.nome_cliente);
-                  await supabase.from("leads").insert(novos);
-                  setTextoCopiado(""); carregarLeads(); alert("Importação concluída!");
-                }}
-                style={{ width: "100%", marginTop: "1rem", background: "linear-gradient(45deg, #d4af37, #b8860b)", color: "black", padding: "1rem", borderRadius: "12px", fontWeight: "bold", cursor: "pointer", border: "none" }}
-              > DECOLAR PARA MINHA LISTA </button>
+
+            {/* COLUNA DA DIREITA: HISTÓRICO REAL */}
+            <div style={{ backgroundColor: "#0f172a", padding: "1.5rem", borderRadius: "1rem", border: "1px solid #d4af37", height: "fit-content" }}>
+              <h3 style={{ color: "#d4af37", marginBottom: "1rem" }}>📜 Meu Histórico</h3>
+              <div style={{ display: "flex", gap: "10px", marginBottom: "1rem" }}>
+                <select value={filtroHistorico} onChange={(e) => setFiltroHistorico(e.target.value)} style={{ background: "#020617", color: "white", border: "1px solid #334155", padding: "5px", borderRadius: "5px" }}>
+                  <option value="hoje">Hoje</option>
+                  <option value="semana">7 dias</option>
+                  <option value="todos">Tudo</option>
+                </select>
+                <input placeholder="Buscar lead..." value={buscaLead} onChange={(e) => setBuscaLead(e.target.value)} style={{ background: "#020617", color: "white", border: "1px solid #334155", padding: "5px", borderRadius: "5px", flex: 1 }} />
+              </div>
+
+              <div style={{ maxHeight: "500px", overflowY: "auto" }}>
+                {historicoFiltrado.map(i => (
+                  <div key={i.id} style={{ padding: "10px", borderBottom: "1px solid #1e293b", fontSize: "0.85rem" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", color: "#d4af37" }}>
+                      <strong>{i.leads?.nome_cliente || "Lead Excluído"}</strong>
+                      <span>{formatarHora(i.created_at)}</span>
+                    </div>
+                    <div style={{ color: "#94a3b8", marginTop: "4px" }}>
+                      <span style={{ color: i.tipo === "REUNIÃO" ? "#60a5fa" : i.tipo === "VISITA" ? "#10b981" : "#94a3b8", fontWeight: "bold" }}>[{i.tipo}]</span> {i.status}
+                    </div>
+                  </div>
+                ))}
+                {historicoFiltrado.length === 0 && <p style={{ textAlign: "center", color: "#64748b" }}>Nenhum registro encontrado.</p>}
+              </div>
             </div>
           </div>
         )}
 
-        {/* PLAYBOOK - PROTEGIDO */}
-        {abaAtiva === "playbook" && logado && (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "2rem" }}>
-            <div style={{ backgroundColor: "#0f172a", padding: "2rem", borderRadius: "1.2rem", border: "1px solid #d4af37" }}>
-              <h3 style={{ color: "#d4af37" }}>🚀 Início (Dia 1 e 2)</h3>
-              <div style={{ backgroundColor: "#020617", padding: "1rem", borderRadius: "8px", marginTop: "1rem" }}>
-                <strong>WhatsApp Dia 1:</strong> "Oi [Nome], te liguei porque tenho um imóvel específico que pode fazer sentido pra você. Me chama aqui."
-              </div>
-              <div style={{ backgroundColor: "#020617", padding: "1rem", borderRadius: "8px", marginTop: "1rem" }}>
-                <strong>WhatsApp Dia 2:</strong> "Esse imóvel tem entrada facilitada e potencial de valorização alto. Posso te explicar em 2 min?"
-              </div>
-            </div>
-            <div style={{ backgroundColor: "#0f172a", padding: "2rem", borderRadius: "1.2rem", border: "1px solid #3b82f6" }}>
-              <h3 style={{ color: "#60a5fa" }}>🔥 Meio (Dia 4 ao 9)</h3>
-              <div style={{ backgroundColor: "#020617", padding: "1rem", borderRadius: "8px", marginTop: "1rem" }}>
-                <strong>WhatsApp Dia 6:</strong> "Atendi um cliente essa semana que comprou com o mesmo perfil que o seu."
-              </div>
-              <div style={{ backgroundColor: "#020617", padding: "1rem", borderRadius: "8px", marginTop: "1rem" }}>
-                <strong>WhatsApp Dia 9:</strong> "Você prefere investir ou morar? Isso muda totalmente a oportunidade."
-              </div>
-            </div>
-            <div style={{ backgroundColor: "#0f172a", padding: "2rem", borderRadius: "1.2rem", border: "1px solid #ef4444" }}>
-              <h3 style={{ color: "#f87171" }}>🏁 Final (Dia 12 ao 21)</h3>
-              <div style={{ backgroundColor: "#020617", padding: "1rem", borderRadius: "8px", marginTop: "1rem" }}>
-                <strong>WhatsApp Dia 15:</strong> "Algumas unidades estão sendo reservadas, por isso estou retomando contato."
-              </div>
-              <div style={{ backgroundColor: "#020617", padding: "1rem", borderRadius: "8px", marginTop: "1rem" }}>
-                <strong>WhatsApp Dia 18:</strong> "Se agora não for o momento, sem problema. Me avisa só pra eu não insistir."
-              </div>
-            </div>
+        {abaAtiva === "playbook" && logado && <div style={{ color: "#94a3b8" }}>Conteúdo do Playbook...</div>}
+
+        {!logado && (abaAtiva !== "dashboard") && (
+          <div style={{ textAlign: "center", marginTop: "5rem" }}>
+            <form onSubmit={handleLogin} style={{ display: "inline-block", background: "#0f172a", padding: "2rem", borderRadius: "1rem", border: "1px solid #d4af37" }}>
+              <h3>Acesso à Equipe</h3>
+              <select value={corretorLogado} onChange={(e) => setCorretorLogado(e.target.value)} style={{ width: "100%", padding: "10px", margin: "10px 0", background: "#020617", color: "white", border: "1px solid #334155" }}>
+                {equipe.map(n => <option key={n} value={n}>{n}</option>)}
+              </select>
+              <input type="password" value={senhaInserida} onChange={(e) => setSenhaInserida(e.target.value)} style={{ width: "100%", padding: "10px", margin: "10px 0", background: "#020617", color: "white", border: "1px solid #334155" }} placeholder="Senha" />
+              <button type="submit" style={{ width: "100%", padding: "10px", background: "#d4af37", border: "none", fontWeight: "bold", cursor: "pointer" }}>ENTRAR</button>
+            </form>
           </div>
         )}
       </div>
