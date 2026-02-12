@@ -2,12 +2,15 @@
 import React, { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
 
+
 export default function SistemaAsas() {
   const [logado, setLogado] = useState(false);
   const [senhaInserida, setSenhaInserida] = useState("");
   const [abaAtiva, setAbaAtiva] = useState("dashboard");
   const [corretorLogado, setCorretorLogado] = useState("Diogo");
   const [leads, setLeads] = useState([]);
+  const [interacoes, setInteracoes] = useState([]);
+  const [filtroData, setFiltroData] = useState("mes");
   const [textoCopiado, setTextoCopiado] = useState("");
   const [filtroTurno, setFiltroTurno] = useState("todos");
 
@@ -24,16 +27,23 @@ export default function SistemaAsas() {
   const equipe = Object.keys(SENHAS_EQUIPE);
   const META_LIGACOES = 400;
 
-  async function carregarLeads() {
-    const { data } = await supabase
+ async function carregarDados() {
+    // 1. Busca os leads para a lista de atendimento
+    const { data: leadsData } = await supabase
       .from("leads")
       .select("*")
       .order("created_at", { ascending: false });
-    if (data) setLeads(data);
+    if (leadsData) setLeads(leadsData);
+
+    // 2. Busca o histórico real de registros para o Dashboard
+    const { data: interData } = await supabase
+      .from("interacoes")
+      .select("*");
+    if (interData) setInteracoes(interData);
   }
 
   useEffect(() => {
-    carregarLeads();
+    carregarDados(); // Agora ele carrega os dois bancos de dados ao iniciar
   }, []);
 
   const handleLogin = (e) => {
@@ -53,16 +63,24 @@ export default function SistemaAsas() {
     return data.toLocaleDateString("pt-BR");
   };
 
-  const mesAtual = new Date().getMonth();
-  const leadsMesAtual = leads.filter(
-    (l) => new Date(l.created_at).getMonth() === mesAtual
-  );
-
   // Cálculos do Dashboard
-  const totalReunioesGeral = leadsMesAtual.reduce((acc, curr) => acc + (curr.total_reunioes || 0), 0);
-  const totalVisitasGeral = leadsMesAtual.reduce((acc, curr) => acc + (curr.total_visitas || 0), 0);
-  const totalContatosGeral = leadsMesAtual.reduce((acc, curr) => acc + (curr.tentativa_atual || 0), 0);
-
+  // Lógica de Filtro de Tempo para o Dashboard
+  const interacoesFiltradas = interacoes.filter(i => {
+    const dataInteracao = new Date(i.created_at);
+    const hoje = new Date();
+    
+    if (filtroData === "hoje") {
+      return dataInteracao.toDateString() === hoje.toDateString();
+    }
+    if (filtroData === "mes") {
+      return dataInteracao.getMonth() === hoje.getMonth() && 
+             dataInteracao.getFullYear() === hoje.getFullYear();
+    }
+    return true; 
+  });
+const totalContatosGeral = interacoesFiltradas.length;
+  const totalReunioesGeral = interacoesFiltradas.filter(i => i.tipo === "reuniao").length;
+  const totalVisitasGeral = interacoesFiltradas.filter(i => i.tipo === "visita").length;
   // Lógica de Atendimento
   const meusLeads = leads.filter((l) => l.corretor_nome === corretorLogado);
   const leadsFiltrados = meusLeads.filter((l) => {
@@ -74,42 +92,70 @@ export default function SistemaAsas() {
   async function registrarInteracao(lead) {
     const status = window.prompt(`Último registro: ${lead.resultado_ultimo || "Nenhum"}\n\nNovo status:`);
     if (!status) return;
-    const tipo = window.prompt("Gerou algo?\n1 - Apenas Contato\n2 - Reunião Agendada\n3 - Visita Agendada");
-    let updateData = { tentativa_atual: (lead.tentativa_atual || 0) + 1, resultado_ultimo: status, corretor_nome: corretorLogado };
-    if (tipo === "2") updateData.total_reunioes = (lead.total_reunioes || 0) + 1;
-    if (tipo === "3") updateData.total_visitas = (lead.total_visitas || 0) + 1;
+
+    const tipoNum = window.prompt("Gerou algo?\n1 - Apenas Contato\n2 - Reunião Agendada\n3 - Visita Agendada");
+    
+    // Aqui definimos o tipo de forma amigável para o banco de dados
+    let tipoTexto = "contato";
+    if (tipoNum === "2") tipoTexto = "reuniao";
+    if (tipoNum === "3") tipoTexto = "visita";
+
+    // 1. Atualizamos o Lead (para que ele mude de posição no seu fluxo)
+    let updateData = { 
+      tentativa_atual: (lead.tentativa_atual || 0) + 1, 
+      resultado_ultimo: status, 
+      corretor_nome: corretorLogado 
+    };
+    if (tipoNum === "2") updateData.total_reunioes = (lead.total_reunioes || 0) + 1;
+    if (tipoNum === "3") updateData.total_visitas = (lead.total_visitas || 0) + 1;
+
     await supabase.from("leads").update(updateData).eq("id", lead.id);
-    carregarLeads();
+
+    // 2. CRIAMOS O REGISTRO NA TABELA INTERAÇÕES (O segredo do Dashboard correto)
+    await supabase.from("interacoes").insert([{
+      lead_id: lead.id,
+      corretor_nome: corretorLogado,
+      status: status,
+      tipo: tipoTexto
+    }]);
+
+    carregarDados(); // Chama a função nova que criamos no passo anterior
   }
 
   async function excluirLead(id) {
     if (confirm("Deseja realmente remover este lead?")) {
       await supabase.from("leads").delete().eq("id", id);
-      carregarLeads();
+      carregarDados();
     }
   }
 
   async function limparMinhaFila() {
     if (confirm(`Atenção ${corretorLogado}: Isso apagará TODOS os seus leads permanentemente. Confirma?`)) {
       await supabase.from("leads").delete().eq("corretor_nome", corretorLogado);
-      carregarLeads();
+      carregarDados();
       alert("Sua fila foi zerada!");
     }
   }
 
   function exportarRelatorio() {
-    const tipo = window.confirm("MÊS ATUAL (OK) ou GERAL (Cancelar)?");
-    const dadosRelatorio = tipo ? leadsMesAtual : leads;
-    let relatorio = `*📊 RELATÓRIO ASAS - ${tipo ? "MÊS ATUAL" : "GERAL"}*\n\n`;
+    const periodo = filtroData === "hoje" ? "HOJE" : "MÊS ATUAL";
+    let relatorio = `*📊 RELATÓRIO ASAS - ${periodo}*\n\n`;
+
     equipe.forEach((nome) => {
-      const filtrados = dadosRelatorio.filter((l) => l.corretor_nome === nome);
-      const contatos = filtrados.reduce((acc, curr) => acc + (curr.tentativa_atual || 0), 0);
-      const reunioes = filtrados.reduce((acc, curr) => acc + (curr.total_reunioes || 0), 0);
-      const visitas = filtrados.reduce((acc, curr) => acc + (curr.total_visitas || 0), 0);
-      relatorio += `👤 *${nome.toUpperCase()}*\n📞 Ligações: ${contatos}\n🤝 Reuniões: ${reunioes}\n🚗 Visitas: ${visitas}\n----------\n`;
+      // Usa as interações filtradas (respeitando se o botão HOJE ou MÊS está ativo)
+      const realizadas = interacoesFiltradas.filter((i) => i.corretor_nome === nome);
+      
+      const contatos = realizadas.length;
+      const reunioes = realizadas.filter(i => i.tipo === "reuniao").length;
+      const visitas = realizadas.filter(i => i.tipo === "visita").length;
+
+      if (contatos > 0) { // Só adiciona ao relatório quem trabalhou no período
+        relatorio += `👤 *${nome.toUpperCase()}*\n📞 Ligações: ${contatos}\n🤝 Reuniões: ${reunioes}\n🚗 Visitas: ${visitas}\n----------\n`;
+      }
     });
+
     navigator.clipboard.writeText(relatorio);
-    alert("Relatório copiado!");
+    alert(`Relatório (${periodo}) copiado com sucesso!`);
   }
 
   return (
@@ -135,17 +181,37 @@ export default function SistemaAsas() {
       <div style={{ padding: "2.5rem" }}>
         {/* DASHBOARD PÚBLICO */}
         {abaAtiva === "dashboard" && (
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 350px", gap: "2rem" }}>
-            <div style={{ backgroundColor: "#0f172a", padding: "2rem", borderRadius: "1.2rem", border: "1px solid #1e293b" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "2rem" }}>
-                <h3 style={{ color: "#d4af37" }}>Performance Mensal</h3>
-                <button onClick={exportarRelatorio} style={{ backgroundColor: "#10b981", color: "white", border: "none", padding: "10px 20px", borderRadius: "8px", fontWeight: "bold", cursor: "pointer" }}>📤 Relatório WhatsApp</button>
-              </div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: "2rem" }}>
+  <div>
+    <h3 style={{ color: "#d4af37", marginBottom: "12px", fontSize: "1.4rem" }}>Performance Mensal</h3>
+    <div style={{ display: "flex", gap: "8px" }}>
+      <button 
+        onClick={() => setFiltroData("hoje")} 
+        style={{ backgroundColor: filtroData === "hoje" ? "#d4af37" : "#1e293b", color: filtroData === "hoje" ? "black" : "white", border: "none", padding: "6px 16px", borderRadius: "6px", cursor: "pointer", fontSize: "0.75rem", fontWeight: "bold", transition: "0.3s" }}
+      >
+        HOJE
+      </button>
+      <button 
+        onClick={() => setFiltroData("mes")} 
+        style={{ backgroundColor: filtroData === "mes" ? "#d4af37" : "#1e293b", color: filtroData === "mes" ? "black" : "white", border: "none", padding: "6px 16px", borderRadius: "6px", cursor: "pointer", fontSize: "0.75rem", fontWeight: "bold", transition: "0.3s" }}
+      >
+        MÊS
+      </button>
+    </div>
+  </div>
+  
+  <button onClick={exportarRelatorio} style={{ backgroundColor: "#10b981", color: "white", border: "none", padding: "12px 20px", borderRadius: "8px", fontWeight: "bold", cursor: "pointer", display: "flex", alignItems: "center", gap: "8px" }}>
+    <span style={{ fontSize: "1.1rem" }}>📤</span> Relatório WhatsApp
+  </button>
+</div>
               {equipe.map((nome) => {
-                const filtrados = leadsMesAtual.filter((l) => l.corretor_nome === nome);
-                const contatos = filtrados.reduce((acc, curr) => acc + (curr.tentativa_atual || 0), 0);
-                const reunioes = filtrados.reduce((acc, curr) => acc + (curr.total_reunioes || 0), 0);
-                const visitas = filtrados.reduce((acc, curr) => acc + (curr.total_visitas || 0), 0);
+              // Filtramos as interações reais deste corretor específico
+              const interacoesDoCorretor = interacoesFiltradas.filter((i) => i.corretor_nome === nome);
+    
+              // Contamos quantas interações existem (isso resolve o erro dos 67)
+              const contatos = interacoesDoCorretor.length; 
+              const reunioes = interacoesDoCorretor.filter(i => i.tipo === "reuniao").length;
+              const visitas = interacoesDoCorretor.filter(i => i.tipo === "visita").length;
                 const progresso = Math.min((contatos / META_LIGACOES) * 100, 100);
                 return (
                   <div key={nome} style={{ marginBottom: "1.5rem", borderBottom: "1px solid #1e293b", paddingBottom: "1rem" }}>
@@ -251,7 +317,7 @@ export default function SistemaAsas() {
                     return { nome_cliente: colunas[0]?.trim(), telefone: colunas[1]?.trim(), tentativa_atual: 1, corretor_nome: corretorLogado };
                   }).filter((l) => l.nome_cliente);
                   await supabase.from("leads").insert(novos);
-                  setTextoCopiado(""); carregarLeads(); alert("Importação concluída!");
+                  setTextoCopiado(""); carregarDados(); alert("Importação concluída!");
                 }}
                 style={{ width: "100%", marginTop: "1rem", background: "linear-gradient(45deg, #d4af37, #b8860b)", color: "black", padding: "1rem", borderRadius: "12px", fontWeight: "bold", cursor: "pointer", border: "none" }}
               > DECOLAR PARA MINHA LISTA </button>
