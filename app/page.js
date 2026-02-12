@@ -3,13 +3,25 @@ import React, { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
 
 export default function SistemaAsas() {
+  const [logado, setLogado] = useState(false);
+  const [senhaInserida, setSenhaInserida] = useState("");
   const [abaAtiva, setAbaAtiva] = useState("dashboard");
   const [corretorLogado, setCorretorLogado] = useState("Diogo");
   const [leads, setLeads] = useState([]);
   const [textoCopiado, setTextoCopiado] = useState("");
   const [filtroTurno, setFiltroTurno] = useState("todos");
 
-  const equipe = ["Pedro", "João", "Sidney", "Thales", "Carlos", "Diogo"];
+  // SENHAS INDIVIDUAIS
+  const SENHAS_EQUIPE = {
+    "Diogo": "diogoasas",
+    "Pedro": "pedroasas",
+    "João": "joaoasas",
+    "Sidney": "sidneyasas",
+    "Thales": "thalesasas",
+    "Carlos": "carlosasas"
+  };
+
+  const equipe = Object.keys(SENHAS_EQUIPE);
   const META_LIGACOES = 400;
 
   async function carregarLeads() {
@@ -24,6 +36,17 @@ export default function SistemaAsas() {
     carregarLeads();
   }, []);
 
+  const handleLogin = (e) => {
+    e.preventDefault();
+    if (senhaInserida === SENHAS_EQUIPE[corretorLogado]) {
+      setLogado(true);
+      setSenhaInserida("");
+    } else {
+      alert(`Senha incorreta para ${corretorLogado}!`);
+      setSenhaInserida("");
+    }
+  };
+
   const formatarData = (dataISO) => {
     if (!dataISO) return "Data não disponível";
     const data = new Date(dataISO);
@@ -34,38 +57,27 @@ export default function SistemaAsas() {
   const leadsMesAtual = leads.filter(
     (l) => new Date(l.created_at).getMonth() === mesAtual
   );
-  
-  const meusLeads = leads.filter((l) => l.corretor_nome === corretorLogado);
 
+  // Cálculos do Dashboard
+  const totalReunioesGeral = leadsMesAtual.reduce((acc, curr) => acc + (curr.total_reunioes || 0), 0);
+  const totalVisitasGeral = leadsMesAtual.reduce((acc, curr) => acc + (curr.total_visitas || 0), 0);
+  const totalContatosGeral = leadsMesAtual.reduce((acc, curr) => acc + (curr.tentativa_atual || 0), 0);
+
+  // Lógica de Atendimento
+  const meusLeads = leads.filter((l) => l.corretor_nome === corretorLogado);
   const leadsFiltrados = meusLeads.filter((l) => {
     if (filtroTurno === "manha") return l.tentativa_atual <= 3;
     if (filtroTurno === "tarde") return l.tentativa_atual > 3;
     return true;
   });
 
-  // Cálculos para o Gráfico de Distribuição Geral
-  const totalReunioesGeral = leadsMesAtual.reduce((acc, curr) => acc + (curr.total_reunioes || 0), 0);
-  const totalVisitasGeral = leadsMesAtual.reduce((acc, curr) => acc + (curr.total_visitas || 0), 0);
-  const totalContatosGeral = leadsMesAtual.reduce((acc, curr) => acc + (curr.tentativa_atual || 0), 0);
-
   async function registrarInteracao(lead) {
-    const status = window.prompt(
-      Último registro: ${lead.resultado_ultimo || "Nenhum"}\n\nNovo status:,
-    );
+    const status = window.prompt(`Último registro: ${lead.resultado_ultimo || "Nenhum"}\n\nNovo status:`);
     if (!status) return;
-    const tipo = window.prompt(
-      "Gerou algo?\n1 - Apenas Contato\n2 - Reunião Agendada\n3 - Visita Agendada",
-    );
-
-    let updateData = {
-      tentativa_atual: (lead.tentativa_atual || 0) + 1,
-      resultado_ultimo: status,
-      corretor_nome: corretorLogado,
-    };
-    
+    const tipo = window.prompt("Gerou algo?\n1 - Apenas Contato\n2 - Reunião Agendada\n3 - Visita Agendada");
+    let updateData = { tentativa_atual: (lead.tentativa_atual || 0) + 1, resultado_ultimo: status, corretor_nome: corretorLogado };
     if (tipo === "2") updateData.total_reunioes = (lead.total_reunioes || 0) + 1;
     if (tipo === "3") updateData.total_visitas = (lead.total_visitas || 0) + 1;
-
     await supabase.from("leads").update(updateData).eq("id", lead.id);
     carregarLeads();
   }
@@ -78,7 +90,7 @@ export default function SistemaAsas() {
   }
 
   async function limparMinhaFila() {
-    if (confirm(Atenção ${corretorLogado}: Isso apagará TODOS os seus leads permanentemente. Confirma?)) {
+    if (confirm(`Atenção ${corretorLogado}: Isso apagará TODOS os seus leads permanentemente. Confirma?`)) {
       await supabase.from("leads").delete().eq("corretor_nome", corretorLogado);
       carregarLeads();
       alert("Sua fila foi zerada!");
@@ -88,17 +100,14 @@ export default function SistemaAsas() {
   function exportarRelatorio() {
     const tipo = window.confirm("MÊS ATUAL (OK) ou GERAL (Cancelar)?");
     const dadosRelatorio = tipo ? leadsMesAtual : leads;
-    let relatorio = *📊 RELATÓRIO ASAS - ${tipo ? "MÊS ATUAL" : "GERAL"}*\n\n;
-    
+    let relatorio = `*📊 RELATÓRIO ASAS - ${tipo ? "MÊS ATUAL" : "GERAL"}*\n\n`;
     equipe.forEach((nome) => {
       const filtrados = dadosRelatorio.filter((l) => l.corretor_nome === nome);
       const contatos = filtrados.reduce((acc, curr) => acc + (curr.tentativa_atual || 0), 0);
       const reunioes = filtrados.reduce((acc, curr) => acc + (curr.total_reunioes || 0), 0);
       const visitas = filtrados.reduce((acc, curr) => acc + (curr.total_visitas || 0), 0);
-      
-      relatorio += 👤 *${nome.toUpperCase()}*\n📞 Ligações: ${contatos}\n🤝 Reuniões: ${reunioes}\n🚗 Visitas: ${visitas}\n----------\n;
+      relatorio += `👤 *${nome.toUpperCase()}*\n📞 Ligações: ${contatos}\n🤝 Reuniões: ${reunioes}\n🚗 Visitas: ${visitas}\n----------\n`;
     });
-    
     navigator.clipboard.writeText(relatorio);
     alert("Relatório copiado!");
   }
@@ -107,42 +116,37 @@ export default function SistemaAsas() {
     <div style={{ backgroundColor: "#020617", minHeight: "100vh", color: "white", fontFamily: "sans-serif" }}>
       <nav style={{ display: "flex", gap: "2rem", padding: "1.2rem 2.5rem", borderBottom: "1px solid #d4af37", backgroundColor: "#0f172a", alignItems: "center" }}>
         <img src="/logo.png" alt="ASAS" style={{ height: "60px" }} />
-        <button onClick={() => setAbaAtiva("dashboard")} style={{ background: "none", border: "none", color: abaAtiva === "dashboard" ? "#d4af37" : "#94a3b8", cursor: "pointer", fontWeight: "bold" }}>
-          📊 DASHBOARD
-        </button>
-        <button onClick={() => setAbaAtiva("atendimento")} style={{ background: "none", border: "none", color: abaAtiva === "atendimento" ? "#d4af37" : "#94a3b8", cursor: "pointer", fontWeight: "bold" }}>
-          📞 MEU FLUXO
-        </button>
-        <button onClick={() => setAbaAtiva("playbook")} style={{ background: "none", border: "none", color: abaAtiva === "playbook" ? "#d4af37" : "#94a3b8", cursor: "pointer", fontWeight: "bold" }}>
-          📖 PLAYBOOK
-        </button>
-        <div style={{ marginLeft: "auto" }}>
-          <select value={corretorLogado} onChange={(e) => setCorretorLogado(e.target.value)} style={{ backgroundColor: "#1e293b", color: "#d4af37", border: "1px solid #d4af37", borderRadius: "0.5rem", padding: "0.4rem" }}>
-            {equipe.map((nome) => (
-              <option key={nome} value={nome}>{nome}</option>
-            ))}
-          </select>
+        <button onClick={() => setAbaAtiva("dashboard")} style={{ background: "none", border: "none", color: abaAtiva === "dashboard" ? "#d4af37" : "#94a3b8", cursor: "pointer", fontWeight: "bold" }}>📊 DASHBOARD</button>
+        <button onClick={() => setAbaAtiva("atendimento")} style={{ background: "none", border: "none", color: abaAtiva === "atendimento" ? "#d4af37" : "#94a3b8", cursor: "pointer", fontWeight: "bold" }}>📞 MEU FLUXO</button>
+        <button onClick={() => setAbaAtiva("playbook")} style={{ background: "none", border: "none", color: abaAtiva === "playbook" ? "#d4af37" : "#94a3b8", cursor: "pointer", fontWeight: "bold" }}>📖 PLAYBOOK</button>
+        
+        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center" }}>
+          {logado ? (
+            <>
+              <span style={{ color: "#d4af37", marginRight: "10px", fontSize: "0.9rem" }}>Olá, <strong>{corretorLogado}</strong></span>
+              <button onClick={() => { setLogado(false); setAbaAtiva("dashboard"); }} style={{ background: "#ef4444", border: "none", color: "white", padding: "5px 12px", borderRadius: "6px", cursor: "pointer", fontSize: "0.75rem", fontWeight: "bold" }}>SAIR</button>
+            </>
+          ) : (
+            <span style={{ color: "#64748b", fontSize: "0.8rem" }}>Modo Visualização</span>
+          )}
         </div>
       </nav>
 
       <div style={{ padding: "2.5rem" }}>
+        {/* DASHBOARD PÚBLICO */}
         {abaAtiva === "dashboard" && (
           <div style={{ display: "grid", gridTemplateColumns: "1fr 350px", gap: "2rem" }}>
             <div style={{ backgroundColor: "#0f172a", padding: "2rem", borderRadius: "1.2rem", border: "1px solid #1e293b" }}>
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "2rem" }}>
                 <h3 style={{ color: "#d4af37" }}>Performance Mensal</h3>
-                <button onClick={exportarRelatorio} style={{ backgroundColor: "#10b981", color: "white", border: "none", padding: "10px 20px", borderRadius: "8px", fontWeight: "bold", cursor: "pointer" }}>
-                  📤 Relatório WhatsApp
-                </button>
+                <button onClick={exportarRelatorio} style={{ backgroundColor: "#10b981", color: "white", border: "none", padding: "10px 20px", borderRadius: "8px", fontWeight: "bold", cursor: "pointer" }}>📤 Relatório WhatsApp</button>
               </div>
-              
               {equipe.map((nome) => {
                 const filtrados = leadsMesAtual.filter((l) => l.corretor_nome === nome);
                 const contatos = filtrados.reduce((acc, curr) => acc + (curr.tentativa_atual || 0), 0);
                 const reunioes = filtrados.reduce((acc, curr) => acc + (curr.total_reunioes || 0), 0);
                 const visitas = filtrados.reduce((acc, curr) => acc + (curr.total_visitas || 0), 0);
                 const progresso = Math.min((contatos / META_LIGACOES) * 100, 100);
-
                 return (
                   <div key={nome} style={{ marginBottom: "1.5rem", borderBottom: "1px solid #1e293b", paddingBottom: "1rem" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px" }}>
@@ -154,13 +158,12 @@ export default function SistemaAsas() {
                       </div>
                     </div>
                     <div style={{ width: "100%", height: "8px", backgroundColor: "#020617", borderRadius: "10px", overflow: "hidden" }}>
-                      <div style={{ width: ${progresso}%, height: "100%", background: "linear-gradient(90deg, #d4af37, #fde047)" }}></div>
+                      <div style={{ width: `${progresso}%`, height: "100%", background: "linear-gradient(90deg, #d4af37, #fde047)" }}></div>
                     </div>
                   </div>
                 );
               })}
             </div>
-
             <div style={{ backgroundColor: "#0f172a", padding: "2rem", borderRadius: "1.2rem", border: "1px solid #d4af37", textAlign: "center" }}>
               <h3 style={{ color: "#d4af37", marginBottom: "2rem" }}>Distribuição do Mês</h3>
               <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem", alignItems: "center" }}>
@@ -182,15 +185,31 @@ export default function SistemaAsas() {
               </div>
               <div style={{ marginTop: "2rem", padding: "1rem", backgroundColor: "#020617", borderRadius: "12px", fontSize: "0.85rem", color: "#94a3b8" }}>
                 Conversão Reunião/Visita: 
-                <span style={{ color: "#d4af37", marginLeft: "5px" }}>
-                  {totalReunioesGeral > 0 ? ((totalVisitasGeral / totalReunioesGeral) * 100).toFixed(1) : 0}%
-                </span>
+                <span style={{ color: "#d4af37", marginLeft: "5px" }}> {totalReunioesGeral > 0 ? ((totalVisitasGeral / totalReunioesGeral) * 100).toFixed(1) : 0}% </span>
               </div>
             </div>
           </div>
         )}
 
-        {abaAtiva === "atendimento" && (
+        {/* LOGIN PARA FLUXO E PLAYBOOK */}
+        {(abaAtiva === "atendimento" || abaAtiva === "playbook") && !logado && (
+          <div style={{ display: "flex", justifyContent: "center", marginTop: "5rem" }}>
+            <div style={{ backgroundColor: "#0f172a", padding: "3rem", borderRadius: "1.5rem", border: "1px solid #d4af37", textAlign: "center", width: "100%", maxWidth: "400px" }}>
+              <h2 style={{ color: "#d4af37", marginBottom: "0.5rem" }}>Login de Equipe</h2>
+              <p style={{ color: "#94a3b8", marginBottom: "1.5rem", fontSize: "0.9rem" }}>Selecione seu perfil para acessar o fluxo</p>
+              <form onSubmit={handleLogin}>
+                <select value={corretorLogado} onChange={(e) => setCorretorLogado(e.target.value)} style={{ width: "100%", padding: "12px", borderRadius: "8px", border: "1px solid #334155", background: "#020617", color: "#d4af37", marginBottom: "1rem" }}>
+                  {equipe.map((nome) => ( <option key={nome} value={nome}>{nome}</option> ))}
+                </select>
+                <input type="password" placeholder="Digite sua senha" value={senhaInserida} onChange={(e) => setSenhaInserida(e.target.value)} style={{ width: "100%", padding: "12px", borderRadius: "8px", border: "1px solid #334155", background: "#020617", color: "white", marginBottom: "1.5rem", textAlign: "center" }} />
+                <button type="submit" style={{ width: "100%", padding: "12px", borderRadius: "8px", background: "linear-gradient(45deg, #d4af37, #b8860b)", color: "black", fontWeight: "bold", cursor: "pointer", border: "none" }}>ACESSAR</button>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* MEU FLUXO - PROTEGIDO */}
+        {abaAtiva === "atendimento" && logado && (
           <div style={{ display: "grid", gridTemplateColumns: "1fr 400px", gap: "2rem" }}>
             <div>
               <div style={{ display: "flex", gap: "1rem", marginBottom: "2rem", alignItems: "center" }}>
@@ -203,8 +222,7 @@ export default function SistemaAsas() {
                 {leadsFiltrados.map((lead) => (
                   <div key={lead.id} style={{ padding: "1.5rem", borderBottom: "1px solid #1e293b", display: "flex", justifyContent: "space-between" }}>
                     <div style={{ flex: 1 }}>
-                      <strong style={{ fontSize: "1.1rem" }}>{lead.nome_cliente}</strong>
-                      <br />
+                      <strong style={{ fontSize: "1.1rem" }}>{lead.nome_cliente}</strong><br />
                       <small style={{ color: "#94a3b8", display: "block", marginBottom: "4px" }}>{lead.telefone}</small>
                       <small style={{ color: "#64748b", fontStyle: "italic" }}>Adicionado em: {formatarData(lead.created_at)}</small>
                       <div style={{ marginTop: "10px", padding: "10px", backgroundColor: "#020617", borderRadius: "8px", borderLeft: "4px solid #d4af37", fontSize: "0.9rem" }}>
@@ -212,9 +230,7 @@ export default function SistemaAsas() {
                       </div>
                     </div>
                     <div style={{ textAlign: "right", minWidth: "150px" }}>
-                      <span style={{ fontSize: "0.75rem", backgroundColor: lead.tentativa_atual >= 5 ? "#d4af37" : "#1e293b", color: lead.tentativa_atual >= 5 ? "black" : "white", padding: "4px 10px", borderRadius: "20px" }}>
-                        {lead.tentativa_atual || 1}ª tentativa
-                      </span>
+                      <span style={{ fontSize: "0.75rem", backgroundColor: lead.tentativa_atual >= 5 ? "#d4af37" : "#1e293b", color: lead.tentativa_atual >= 5 ? "black" : "white", padding: "4px 10px", borderRadius: "20px" }}> {lead.tentativa_atual || 1}ª tentativa </span>
                       <div style={{ display: "flex", gap: "10px", marginTop: "15px", justifyContent: "flex-end" }}>
                         <button onClick={() => registrarInteracao(lead)} style={{ backgroundColor: "#d4af37", color: "black", border: "none", padding: "8px 12px", borderRadius: "6px", fontWeight: "bold", cursor: "pointer" }}>REGISTRAR</button>
                         <button onClick={() => excluirLead(lead.id)} style={{ backgroundColor: "#ef4444", color: "white", border: "none", padding: "8px 12px", borderRadius: "6px", cursor: "pointer" }}>🗑️</button>
@@ -232,27 +248,19 @@ export default function SistemaAsas() {
                   const linhas = textoCopiado.split("\n");
                   const novos = linhas.map((lin) => {
                     const colunas = lin.split(/\t| {2,}/);
-                    return {
-                      nome_cliente: colunas[0]?.trim(),
-                      telefone: colunas[1]?.trim(),
-                      tentativa_atual: 1,
-                      corretor_nome: corretorLogado,
-                    };
+                    return { nome_cliente: colunas[0]?.trim(), telefone: colunas[1]?.trim(), tentativa_atual: 1, corretor_nome: corretorLogado };
                   }).filter((l) => l.nome_cliente);
                   await supabase.from("leads").insert(novos);
-                  setTextoCopiado("");
-                  carregarLeads();
-                  alert("Importação concluída!");
+                  setTextoCopiado(""); carregarLeads(); alert("Importação concluída!");
                 }}
                 style={{ width: "100%", marginTop: "1rem", background: "linear-gradient(45deg, #d4af37, #b8860b)", color: "black", padding: "1rem", borderRadius: "12px", fontWeight: "bold", cursor: "pointer", border: "none" }}
-              >
-                DECOLAR PARA MINHA LISTA
-              </button>
+              > DECOLAR PARA MINHA LISTA </button>
             </div>
           </div>
         )}
 
-        {abaAtiva === "playbook" && (
+        {/* PLAYBOOK - PROTEGIDO */}
+        {abaAtiva === "playbook" && logado && (
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "2rem" }}>
             <div style={{ backgroundColor: "#0f172a", padding: "2rem", borderRadius: "1.2rem", border: "1px solid #d4af37" }}>
               <h3 style={{ color: "#d4af37" }}>🚀 Início (Dia 1 e 2)</h3>
