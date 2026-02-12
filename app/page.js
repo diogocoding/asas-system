@@ -190,29 +190,28 @@ const totalContatosGeral = interacoesFiltradas.length;
         style={{ backgroundColor: filtroData === "hoje" ? "#d4af37" : "#1e293b", color: filtroData === "hoje" ? "black" : "white", border: "none", padding: "6px 16px", borderRadius: "6px", cursor: "pointer", fontSize: "0.75rem", fontWeight: "bold", transition: "0.3s" }}
       >
         HOJE
-      </button>
-      <button 
-        onClick={() => setFiltroData("mes")} 
-        style={{ backgroundColor: filtroData === "mes" ? "#d4af37" : "#1e293b", color: filtroData === "mes" ? "black" : "white", border: "none", padding: "6px 16px", borderRadius: "6px", cursor: "pointer", fontSize: "0.75rem", fontWeight: "bold", transition: "0.3s" }}
-      >
-        MÊS
-      </button>
-    </div>
-  </div>
-  
-  <button onClick={exportarRelatorio} style={{ backgroundColor: "#10b981", color: "white", border: "none", padding: "12px 20px", borderRadius: "8px", fontWeight: "bold", cursor: "pointer", display: "flex", alignItems: "center", gap: "8px" }}>
-    <span style={{ fontSize: "1.1rem" }}>📤</span> Relatório WhatsApp
-  </button>
-</div>
+                    </button>
+                    <button 
+                      onClick={() => setFiltroData("mes")} 
+                      style={{ backgroundColor: filtroData === "mes" ? "#d4af37" : "#1e293b", color: filtroData === "mes" ? "black" : "white", border: "none", padding: "6px 16px", borderRadius: "6px", cursor: "pointer", fontSize: "0.75rem", fontWeight: "bold" }}
+                    >
+                      MÊS
+                    </button>
+                  </div>
+                </div>
+                
+                <button onClick={exportarRelatorio} style={{ backgroundColor: "#10b981", color: "white", border: "none", padding: "12px 20px", borderRadius: "8px", fontWeight: "bold", cursor: "pointer", display: "flex", alignItems: "center", gap: "8px" }}>
+                  <span style={{ fontSize: "1.1rem" }}>📤</span> Relatório WhatsApp
+                </button>
+              </div>
+
               {equipe.map((nome) => {
-              // Filtramos as interações reais deste corretor específico
-              const interacoesDoCorretor = interacoesFiltradas.filter((i) => i.corretor_nome === nome);
-    
-              // Contamos quantas interações existem (isso resolve o erro dos 67)
-              const contatos = interacoesDoCorretor.length; 
-              const reunioes = interacoesDoCorretor.filter(i => i.tipo === "reuniao").length;
-              const visitas = interacoesDoCorretor.filter(i => i.tipo === "visita").length;
+                const interacoesDoCorretor = interacoesFiltradas.filter((i) => i.corretor_nome === nome);
+                const contatos = interacoesDoCorretor.length; 
+                const reunioes = interacoesDoCorretor.filter(i => i.tipo === "reuniao").length;
+                const visitas = interacoesDoCorretor.filter(i => i.tipo === "visita").length;
                 const progresso = Math.min((contatos / META_LIGACOES) * 100, 100);
+
                 return (
                   <div key={nome} style={{ marginBottom: "1.5rem", borderBottom: "1px solid #1e293b", paddingBottom: "1rem" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px" }}>
