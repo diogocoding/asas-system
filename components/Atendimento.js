@@ -31,7 +31,7 @@ export default function Atendimento({
   color: "#94a3b8", 
   display: "block", 
   marginBottom: "4px", 
-  filter: "blur(5px)" //adicionando blur para fazer o gif e por no linkedin
+  filter: "blur(3px)" //adicionando blur para fazer o gif e por no linkedin
 }}>
   {lead.telefone}
 </small>
