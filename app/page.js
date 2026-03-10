@@ -15,16 +15,7 @@ export default function SistemaAsas() {
   const [textoCopiado, setTextoCopiado] = useState("");
   const [filtroTurno, setFiltroTurno] = useState("todos");
 
-  // SENHAS INDIVIDUAIS
-  const SENHAS_EQUIPE = {
-    "Diogo": "diogoasas",
-    "Pedro": "pedroasas",
-    "João": "joaoasas",
-    "Sidney": "sidneyasas",
-    "Thales": "thalesasas",
-    "Carlos": "carlosasas"
-  };
-
+  
   const equipe = Object.keys(SENHAS_EQUIPE);
   const META_LIGACOES = 400;
 
