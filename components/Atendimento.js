@@ -27,7 +27,14 @@ export default function Atendimento({
             <div key={lead.id} style={{ padding: "1.5rem", borderBottom: "1px solid #1e293b", display: "flex", justifyContent: "space-between" }}>
               <div style={{ flex: 1 }}>
                 <strong style={{ fontSize: "1.1rem" }}>{lead.nome_cliente}</strong><br />
-                <small style={{ color: "#94a3b8", display: "block", marginBottom: "4px" }}>{lead.telefone}</small>
+                <small style={{ 
+  color: "#94a3b8", 
+  display: "block", 
+  marginBottom: "4px", 
+  filter: "blur(5px)" //adicionando blur para fazer o gif e por no linkedin
+}}>
+  {lead.telefone}
+</small>
                 <small style={{ color: "#64748b", fontStyle: "italic" }}>Adicionado em: {formatarData(lead.created_at)}</small>
                 <div style={{ marginTop: "10px", padding: "10px", backgroundColor: "#020617", borderRadius: "8px", borderLeft: "4px solid #d4af37", fontSize: "0.9rem" }}>
                   <strong>ÚLTIMO REGISTRO:</strong> {lead.resultado_ultimo || "Sem anotações."}
