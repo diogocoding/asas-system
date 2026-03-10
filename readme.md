@@ -1,30 +1,30 @@
 # 🚀 ASAS System - CRM de Gestão de Cadência e Performance
 
-O **ASAS System** é uma aplicação web **Full Stack** desenvolvida para gerenciar fluxos de vendas através de uma cadência sistemática de 21 dias. O sistema automatiza o acompanhamento de leads, monitora metas de equipe e fornece métricas em tempo real para tomada de decisão gerencial.
+O **ASAS System** é uma aplicação web **Full Stack** profissional desenvolvida para gerenciar fluxos de vendas através de uma cadência sistemática de 21 dias. O sistema automatiza o acompanhamento de leads, monitora metas de equipe e fornece métricas em tempo real para tomada de decisão gerencial.
 
 ## 🧠 Conceito do Sistema
-O software foi projetado para aplicar a metodologia de **"venda sistemática"**, onde o foco está na persistência do contato. A lógica do sistema prioriza leads que atingem do 5º ao 9º contato, estágio onde estatisticamente ocorrem a maioria das conversões.
+O software aplica a metodologia de **"venda sistemática"**, onde o foco está na persistência. A lógica prioriza o acompanhamento de leads do 5º ao 9º contato, estágio onde estatisticamente ocorrem a maioria das conversões no mercado imobiliário.
 
 ## 🛠️ Stack Tecnológica
-* **Frontend:** [Next.js](https://nextjs.org/) (React) com Hooks para gestão de estado global.
-* **Backend as a Service:** [Supabase](https://supabase.com/) (PostgreSQL) para persistência e segurança de dados.
-* **Segurança:** Implementação de **Row Level Security (RLS)** e variáveis de ambiente protegidas.
-* **Deploy:** [Vercel](https://vercel.com/) com integração contínua via GitHub.
+* **Frontend:** [Next.js](https://nextjs.org/) (React) com **Arquitetura Componentizada** para alta manutenibilidade.
+* **Backend as a Service:** [Supabase](https://supabase.com/) (PostgreSQL) para persistência e gestão de estados em tempo real.
+* **Segurança:** Implementação de variáveis de ambiente (`.env`) e proteção de rotas via estado de autenticação.
+* **Deploy:** [Vercel](https://vercel.com/) com CI/CD integrado ao GitHub.
 
 ## ✨ Funcionalidades Principais
-* **Dashboard de Performance:** Visualização dinâmica da meta mensal de 400 contatos por corretor, com barras de progresso automáticas.
-* **Fila de Atendimento Inteligente:** Algoritmo que filtra leads por turnos (Manhã para novos leads e Tarde para follow-ups agressivos).
-* **Playbook Estratégico:** Aba integrada com scripts de abordagem prontos para cada etapa do funil (Início, Meio e Fim).
-* **Gestão de Métricas Finais:** Registro e soma automática de **Reuniões Agendadas** e **Visitas Realizadas** por membro da equipe.
-* **Relatórios Automatizados:** Geração de relatórios formatados prontos para compartilhamento via WhatsApp.
+* **Dashboard de Performance:** Monitoramento da meta mensal (400 contatos/corretor) com barras de progresso dinâmicas.
+* **Fila de Atendimento Inteligente:** Algoritmo que segmenta leads por turnos (Manhã: novos leads; Tarde: follow-ups de alta conversão).
+* **Playbook Estratégico:** Biblioteca de scripts de abordagem (WhatsApp/Ligação) integrada ao fluxo de trabalho.
+* **Métricas de Conversão:** Registro automatizado de Reuniões e Visitas por membro da equipe.
+* **Importação Massiva:** Módulo para importação de leads via processamento de texto, otimizando o setup inicial.
 
-## 🔒 Segurança e Boas Práticas (ADS)
-* **Ocultação de Credenciais:** Uso de arquivos `.env.local` e `.gitignore` para proteção de chaves sensíveis.
-* **Integridade de Dados:** Validação de tipos numéricos (`Number()`) para garantir cálculos precisos em ambiente de produção.
-* **Componentização:** Código modularizado em React para facilitar a manutenção e escalabilidade.
+## 🔒 Engenharia de Software & Boas Práticas (ADS)
+* **Refatoração e Componentização:** Separação de responsabilidades em componentes independentes (`Dashboard`, `Atendimento`, `Playbook`).
+* **Privacidade de Dados (LGPD):** Implementação de máscaras e filtros de desfoque (*blur*) em campos sensíveis para demonstrações e segurança do usuário.
+* **Integridade de Dados:** Tratamento rigoroso de tipos numéricos e estados para garantir cálculos precisos em ambiente de produção.
 
 ## 📈 Resultados Gerenciais
-O sistema permite ao gestor auditar o esforço da equipe, garantindo que o volume de contatos diários se transforme em resultados tangíveis no final do mês.
+O sistema permite ao gestor auditar o esforço real da equipe, garantindo que o volume de contatos diários seja convertido em resultados tangíveis.
 
 ---
 💡 **Desenvolvido por:** [Diogo Nascimento](https://github.com/diogocoding)  
